@@ -15,7 +15,8 @@ export default function Signup() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5000/signup", {
+      const API = process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
+      const res = await fetch(`${API}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

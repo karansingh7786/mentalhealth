@@ -23,7 +23,8 @@ export default function Dashboard() {
 
   const loadHistory = async (uid) => {
     try {
-      const res = await fetch(`http://localhost:5000/history?user_id=${uid}`);
+      const API = process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
+      const res = await fetch(`${API}/history?user_id=${uid}`);
       if (res.ok) {
         const data = await res.json();
         setHistory(data);
@@ -47,7 +48,8 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/predict", {
+      const API = process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
+      const res = await fetch(`${API}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, user_id: userId }),
