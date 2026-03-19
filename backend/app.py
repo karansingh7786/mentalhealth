@@ -1,39 +1,33 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import mysql.connector
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+import json
+import re
+import datetime
 
 load_dotenv()  # Load variables from .env file
 
 app = Flask(__name__)
 CORS(app)
 
-# --- CONFIGURATION ---
-DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_USER = os.environ.get("DB_USER", "root")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "Satrujeet28")  # User's actual password
-DB_NAME = os.environ.get("DB_NAME", "mindalert_db")
+# --- IN-MEMORY DATABASE (FOR DEMO PURPOSES) ---
+# This replaces MySQL/PostgreSQL so the app runs instantly anywhere
+USERS = {}        # Maps email -> {"id": 1, "password": "...", "email": "..."}
+USER_LOGS = []    # List of prediction log dictionaries
+next_user_id = 1
+next_log_id = 1
 
-# Gemini Setup (Optional, falls back if key is invalid/missing)
+# Gemini Setup
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# --- DATABASE CONNECTION HELPER ---
-def get_db_connection():
-    try:
-        return mysql.connector.connect(
-            host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
-    except mysql.connector.Error as err:
-        print(f"Error connecting to DB: {err}")
-        return None
-
 # --- AUTHENTICATION ROUTES ---
 @app.route('/signup', methods=['POST'])
 def signup():
+    global next_user_id
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -41,23 +35,19 @@ def signup():
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
         
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database error"}), 500
+    if email in USERS:
+        return jsonify({"error": "Email already exists"}), 400
         
-    try:
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, password))
-        conn.commit()
-        user_id = cursor.lastrowid
-        return jsonify({"message": "Signup successful", "user_id": user_id}), 201
-    except mysql.connector.Error as err:
-        if err.errno == 1062: # Duplicate entry
-            return jsonify({"error": "Email already exists"}), 400
-        return jsonify({"error": "Signup failed"}), 500
-    finally:
-        cursor.close()
-        conn.close()
+    # Store user in memory
+    user_id = next_user_id
+    USERS[email] = {
+        "id": user_id,
+        "email": email,
+        "password": password
+    }
+    next_user_id += 1
+    
+    return jsonify({"message": "Signup successful", "user_id": user_id}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -65,30 +55,14 @@ def login():
     email = data.get('email')
     password = data.get('password')
     
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database error"}), 500
-        
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM users WHERE email=%s AND password=%s", (email, password))
-        user = cursor.fetchone()
-        
-        if user:
-            return jsonify({"message": "Login successful", "user_id": user['id']}), 200
-        else:
-            return jsonify({"error": "Invalid email or password"}), 401
-    finally:
-        cursor.close()
-        conn.close()
-
-import json
+    if email in USERS and USERS[email]['password'] == password:
+        return jsonify({"message": "Login successful", "user_id": USERS[email]['id']}), 200
+    else:
+        return jsonify({"error": "Invalid email or password"}), 401
 
 # --- FATIGUE LOGIC & PREDICTION ---
 def get_recommendation(fatigue, sleep, study, screen, stress):
     """Generates the recommendation using Gemini AI if available, else uses defaults."""
-    import re
-    
     fallback = {
         "suggestion": "Take rest and stay hydrated.",
         "summary": "You may be experiencing fatigue due to imbalance in routine.",
@@ -141,6 +115,7 @@ Do not include markdown or extra text."""
 
 @app.route('/predict', methods=['POST'])
 def predict_fatigue():
+    global next_log_id
     data = request.json
     user_id = data.get('user_id')
     sleep = float(data.get('sleep', 0))
@@ -165,21 +140,20 @@ def predict_fatigue():
     rec_dict = get_recommendation(fatigue, sleep, study, screen, stress)
     rec_str = json.dumps(rec_dict)
     
-    # Save to Database
-    conn = get_db_connection()
-    if conn:
-        try:
-            cursor = conn.cursor()
-            query = """INSERT INTO user_logs 
-                       (user_id, sleep_hours, study_hours, screen_time, stress_level, fatigue_result, recommendation) 
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)"""
-            cursor.execute(query, (user_id, sleep, study, screen, stress, fatigue, rec_str))
-            conn.commit()
-        except Exception as e:
-            print(f"DB Insert Error: {e}")
-        finally:
-            cursor.close()
-            conn.close()
+    # Save to In-Memory Database (Prepend so newest is first)
+    log_entry = {
+        "id": next_log_id,
+        "user_id": int(user_id),
+        "sleep_hours": sleep,
+        "study_hours": study,
+        "screen_time": screen,
+        "stress_level": stress,
+        "fatigue_result": fatigue,
+        "recommendation": rec_str,
+        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    USER_LOGS.insert(0, log_entry)
+    next_log_id += 1
             
     return jsonify({
         "fatigue": fatigue,
@@ -193,18 +167,20 @@ def get_history():
     if not user_id:
         return jsonify({"error": "User ID required"}), 400
         
-    conn = get_db_connection()
-    if not conn:
-        return jsonify([]), 500
-        
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM user_logs WHERE user_id=%s ORDER BY created_at DESC LIMIT 5", (user_id,))
-        records = cursor.fetchall()
-        return jsonify(records)
-    finally:
-        cursor.close()
-        conn.close()
+        uid = int(user_id)
+        # Filter logs corresponding to this user
+        user_specific_logs = [log for log in USER_LOGS if log["user_id"] == uid]
+        
+        # Return top 5 logs (already sorted descending because we used insert(0))
+        return jsonify(user_specific_logs[:5])
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch history"}), 500
+
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({"status": "MindAlert API is running completely In-Memory!"})
 
 if __name__ == '__main__':
+    # Running on port 5000 as typical for Flask REST APIs
     app.run(debug=True, port=5000)
