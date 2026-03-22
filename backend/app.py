@@ -6,28 +6,30 @@ import google.generativeai as genai
 import json
 import re
 import datetime
+import psycopg2
 
 load_dotenv()  # Load variables from .env file
 
 app = Flask(__name__)
 CORS(app)
 
-# --- IN-MEMORY DATABASE (FOR DEMO PURPOSES) ---
-# This replaces MySQL/PostgreSQL so the app runs instantly anywhere
-USERS = {}        # Maps email -> {"id": 1, "password": "...", "email": "..."}
-USER_LOGS = []    # List of prediction log dictionaries
-next_user_id = 1
-next_log_id = 1
-
 # Gemini Setup
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.environ.get("DB_HOST"),
+        database=os.environ.get("DB_NAME"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        port=os.environ.get("DB_PORT")
+    )
+
 # --- AUTHENTICATION ROUTES ---
 @app.route('/signup', methods=['POST'])
 def signup():
-    global next_user_id
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -35,19 +37,31 @@ def signup():
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
         
-    if email in USERS:
-        return jsonify({"error": "Email already exists"}), 400
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
         
-    # Store user in memory
-    user_id = next_user_id
-    USERS[email] = {
-        "id": user_id,
-        "email": email,
-        "password": password
-    }
-    next_user_id += 1
-    
-    return jsonify({"message": "Signup successful", "user_id": user_id}), 201
+        # Check if email exists
+        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            return jsonify({"error": "Email already exists"}), 400
+            
+        # Insert new user
+        cur.execute(
+            "INSERT INTO users (email, password) VALUES (%s, %s) RETURNING id",
+            (email, password)
+        )
+        user_id = cur.fetchone()[0]
+        conn.commit()
+        
+        return jsonify({"message": "Signup successful", "user_id": user_id}), 201
+    except psycopg2.Error as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            cur.close()
+            conn.close()
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -55,10 +69,24 @@ def login():
     email = data.get('email')
     password = data.get('password')
     
-    if email in USERS and USERS[email]['password'] == password:
-        return jsonify({"message": "Login successful", "user_id": USERS[email]['id']}), 200
-    else:
-        return jsonify({"error": "Invalid email or password"}), 401
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT id FROM users WHERE email = %s AND password = %s", (email, password))
+        user = cur.fetchone()
+        
+        if user:
+            return jsonify({"message": "Login successful", "user_id": user[0]}), 200
+        else:
+            return jsonify({"error": "Invalid email or password"}), 401
+    except psycopg2.Error as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            cur.close()
+            conn.close()
 
 # --- FATIGUE LOGIC & PREDICTION ---
 def get_recommendation(fatigue, sleep, study, screen, stress):
@@ -115,7 +143,6 @@ Do not include markdown or extra text."""
 
 @app.route('/predict', methods=['POST'])
 def predict_fatigue():
-    global next_log_id
     data = request.json
     user_id = data.get('user_id')
     sleep = float(data.get('sleep', 0))
@@ -140,26 +167,31 @@ def predict_fatigue():
     rec_dict = get_recommendation(fatigue, sleep, study, screen, stress)
     rec_str = json.dumps(rec_dict)
     
-    # Save to In-Memory Database (Prepend so newest is first)
-    log_entry = {
-        "id": next_log_id,
-        "user_id": int(user_id),
-        "sleep_hours": sleep,
-        "study_hours": study,
-        "screen_time": screen,
-        "stress_level": stress,
-        "fatigue_result": fatigue,
-        "recommendation": rec_str,
-        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    USER_LOGS.insert(0, log_entry)
-    next_log_id += 1
-            
-    return jsonify({
-        "fatigue": fatigue,
-        "message": msg,
-        "recommendation": rec_dict
-    })
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Insert log into DB
+        cur.execute(
+            """INSERT INTO user_logs 
+               (user_id, sleep_hours, study_hours, screen_time, stress_level, fatigue_result, recommendation) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (user_id, sleep, study, screen, stress, fatigue, rec_str)
+        )
+        conn.commit()
+        
+        return jsonify({
+            "fatigue": fatigue,
+            "message": msg,
+            "recommendation": rec_dict
+        })
+    except psycopg2.Error as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            cur.close()
+            conn.close()
 
 @app.route('/history', methods=['GET'])
 def get_history():
@@ -167,19 +199,46 @@ def get_history():
     if not user_id:
         return jsonify({"error": "User ID required"}), 400
         
+    conn = None
     try:
-        uid = int(user_id)
-        # Filter logs corresponding to this user
-        user_specific_logs = [log for log in USER_LOGS if log["user_id"] == uid]
+        conn = get_db_connection()
+        cur = conn.cursor()
         
-        # Return top 5 logs (already sorted descending because we used insert(0))
-        return jsonify(user_specific_logs[:5])
-    except Exception as e:
-        return jsonify({"error": "Failed to fetch history"}), 500
+        cur.execute(
+            """SELECT id, user_id, sleep_hours, study_hours, screen_time, stress_level, fatigue_result, recommendation, created_at 
+               FROM user_logs 
+               WHERE user_id = %s 
+               ORDER BY created_at DESC 
+               LIMIT 5""",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        
+        history = []
+        for row in rows:
+            history.append({
+                "id": row[0],
+                "user_id": row[1],
+                "sleep_hours": row[2],
+                "study_hours": row[3],
+                "screen_time": row[4],
+                "stress_level": row[5],
+                "fatigue_result": row[6],
+                "recommendation": row[7],
+                "created_at": str(row[8]) if row[8] else None
+            })
+            
+        return jsonify(history)
+    except psycopg2.Error as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            cur.close()
+            conn.close()
 
 @app.route('/', methods=['GET'])
 def index():
-    return jsonify({"status": "MindAlert API is running completely In-Memory!"})
+    return jsonify({"status": "MindAlert API is running with PostgreSQL!"})
 
 if __name__ == '__main__':
     # Running on port 5000 as typical for Flask REST APIs
