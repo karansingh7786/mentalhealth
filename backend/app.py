@@ -7,8 +7,9 @@ import json
 import re
 import datetime
 import psycopg2
-
+import pytz
 load_dotenv()  # Load variables from .env file
+ist = pytz.timezone('Asia/Kolkata')
 
 app = Flask(__name__)
 CORS(app)
@@ -167,6 +168,8 @@ def predict_fatigue():
     rec_dict = get_recommendation(fatigue, sleep, study, screen, stress)
     rec_str = json.dumps(rec_dict)
     
+    created_at = datetime.datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
+    
     conn = None
     try:
         conn = get_db_connection()
@@ -175,9 +178,9 @@ def predict_fatigue():
         # Insert log into DB
         cur.execute(
             """INSERT INTO user_logs 
-               (user_id, sleep_hours, study_hours, screen_time, stress_level, fatigue_result, recommendation) 
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (user_id, sleep, study, screen, stress, fatigue, rec_str)
+               (user_id, sleep_hours, study_hours, screen_time, stress_level, fatigue_result, recommendation, created_at) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (user_id, sleep, study, screen, stress, fatigue, rec_str, created_at)
         )
         conn.commit()
         
