@@ -2,21 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .glass-panel {
-    @apply bg-panel/80 backdrop-blur-xl border border-slate-200 shadow-xl rounded-2xl;
+:root {
+  --radius: 0.875rem;
+  --background: oklch(0.99 0.005 260);
+  --foreground: oklch(0.2 0.03 265);
+  --primary: oklch(0.55 0.2 285);
+  --primary-foreground: oklch(0.99 0.005 260);
+  --success: oklch(0.6 0.17 150);
+  --warning: oklch(0.7 0.18 75);
+  --danger: oklch(0.6 0.22 25);
+  --muted: oklch(0.96 0.01 260);
+  --muted-foreground: oklch(0.5 0.02 260);
+  --border: oklch(0.9 0.01 260);
+  --input: oklch(0.97 0.01 260);
+  --ring: oklch(0.55 0.2 285);
+
+  --gradient-bg: radial-gradient(ellipse at top, oklch(0.95 0.04 285) 0%, oklch(0.98 0.01 260) 50%, oklch(0.99 0.005 260) 100%);
+  --gradient-primary: linear-gradient(135deg, oklch(0.55 0.2 285), oklch(0.62 0.18 230));
+  --gradient-card: linear-gradient(135deg, oklch(1 0 0), oklch(0.99 0.005 260));
+  --shadow-glow: 0 10px 40px -10px oklch(0.55 0.2 285 / 0.35);
+  --shadow-elegant: 0 12px 40px -16px oklch(0.3 0.05 265 / 0.18);
+}
+
+@layer base {
+  body {
+    background: var(--gradient-bg);
+    background-attachment: fixed;
+    color: var(--foreground);
+    min-height: 100vh;
   }
 }
 
-body {
-  @apply bg-background text-slate-800 min-h-screen overflow-x-hidden;
-}
-
-/* Custom range slider styling */
-input[type=range] {
-  @apply w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer border border-slate-300;
-}
-
-input[type=range]::-webkit-slider-thumb {
-  @apply appearance-none w-5 h-5 rounded-full bg-primary shadow-md hover:scale-110 transition-transform cursor-grab active:cursor-grabbing border-2 border-white;
+@layer utilities {
+  .glass-card {
+    background: var(--gradient-card);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-elegant);
+  }
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .btn-primary {
+    background: var(--gradient-primary);
+    color: var(--primary-foreground);
+    padding: 0.75rem 1.75rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-glow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .btn-primary:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 50px -10px oklch(0.7 0.18 285 / 0.6);
+  }
+  .btn-ghost {
+    background: oklch(1 0 0 / 0.05);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    padding: 0.75rem 1.75rem;
+    border-radius: var(--radius);
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
 }

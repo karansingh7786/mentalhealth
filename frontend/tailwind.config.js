@@ -8,12 +8,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: '#f8fafc',
-        panel: '#ffffff',
-        primary: '#3b82f6',
-        low: '#22c55e',
-        medium: '#eab308',
-        high: '#ef4444'
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
+        success: "var(--success)",
+        warning: "var(--warning)",
+        danger: "var(--danger)",
+        destructive: "var(--danger)",
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
       }
     },
   },

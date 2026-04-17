@@ -1,17 +1,20 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Activity, Brain, Clock, Target, AlertCircle, HeartPulse, CheckSquare, History } from "lucide-react";
+import { Activity, Sparkles, Quote, Lightbulb, Clock, ListChecks, Loader2, LogOut } from "lucide-react";
 
 export default function Dashboard() {
   const router = useRouter();
   const [userId, setUserId] = useState(null);
-  const [formData, setFormData] = useState({ sleep: 7, study: 4, screen: 5, stress: 5 });
+  
+  const [sleep, setSleep] = useState(7);
+  const [study, setStudy] = useState(5);
+  const [screen, setScreen] = useState(4);
+  const [stress, setStress] = useState(5);
+  
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [extInsights, setExtInsights] = useState(null);
-  const [fatigueScore, setFatigueScore] = useState(0);
 
   useEffect(() => {
     const storedUserId = localStorage.getItem("user_id");
@@ -23,16 +26,32 @@ export default function Dashboard() {
     }
   }, []);
 
+  const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
+
   const loadHistory = async (uid) => {
     try {
-      const API = process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
-      const res = await fetch(`${API}/history?user_id=${uid}`);
+      const res = await fetch(`${getApiUrl()}/history?user_id=${uid}`);
       if (res.ok) {
         const data = await res.json();
-        setHistory(data);
+        // format data
+        const formatted = data.map(log => {
+           let score = 50; 
+           const sPenalty = Math.max(0, (8 - log.sleep_hours) * 8);
+           const stPenalty = Math.max(0, (log.study_hours - 4) * 4);
+           const scPenalty = Math.max(0, (log.screen_time - 3) * 5);
+           const strPenalty = log.stress_level * 7;
+           score = Math.min(100, Math.round(sPenalty + stPenalty + scPenalty + strPenalty));
+           
+           return {
+             date: new Date(log.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: "2-digit", minute: "2-digit" }),
+             status: log.fatigue_result,
+             score: score
+           };
+        });
+        setHistory(formatted);
       }
-    } catch (error) {
-      console.error("Failed to load history.");
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -41,304 +60,235 @@ export default function Dashboard() {
     router.push("/");
   };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: parseFloat(e.target.value) });
+  const analyzeLocal = (sleep, study, screen, stress) => {
+    const sleepPenalty = Math.max(0, (8 - sleep) * 8);
+    const studyPenalty = Math.max(0, (study - 4) * 4);
+    const screenPenalty = Math.max(0, (screen - 3) * 5);
+    const stressPenalty = stress * 7;
+    const raw = sleepPenalty + studyPenalty + screenPenalty + stressPenalty;
+    const score = Math.min(100, Math.round(raw));
+
+    let status = "LOW";
+    if (score >= 65) status = "HIGH";
+    else if (score >= 35) status = "MEDIUM";
+
+    const reasons = [];
+    if (sleep < 7) reasons.push(`Sleep is below recommended (${sleep}h vs 7–9h).`);
+    if (study > 6) reasons.push(`High study load (${study}h) without enough breaks.`);
+    if (screen > 5) reasons.push(`Excessive screen time (${screen}h) strains your eyes & brain.`);
+    if (stress >= 7) reasons.push(`Stress level (${stress}/10) is significantly elevated.`);
+    if (reasons.length === 0) reasons.push("Your habits are well-balanced today.");
+
+    const plan = [];
+    if (sleep < 7) plan.push("Aim for 7–9 hours of sleep tonight.");
+    if (study > 6) plan.push("Apply the Pomodoro technique: 25m focus / 5m break.");
+    if (screen > 5) plan.push("Take a 20-minute screen-free walk.");
+    if (stress >= 6) plan.push("Try 5 minutes of deep breathing or meditation.");
+    plan.push("Drink a glass of water and stretch your shoulders.");
+
+    const recoveryHours = status === "LOW" ? 2 : status === "MEDIUM" ? 6 : 12;
+
+    return { score, status, reasons, plan, recoveryHours };
   };
 
-  const calculateScore = (data) => {
-    let score = 0;
-    if (data.sleep < 7) score += (7 - data.sleep) * 8;
-    if (data.study > 8) score += (data.study - 8) * 3;
-    if (data.screen > 5) score += (data.screen - 5) * 3;
-    score += (data.stress * 4);
-    if (data.sleep >= 8 && data.stress <= 3 && data.screen <= 4) score = Math.max(score - 10, 5);
-    return Math.min(Math.max(Math.round(score), 5), 98);
-  };
-
-  const generateInsights = (data, level) => {
-    let reasons = [];
-    let plan = [];
-    let recovery = "12-24 hours";
-
-    if (data.sleep < 7) {
-      reasons.push(`Inadequate sleep (${data.sleep}h)`);
-      plan.push("Aim for 7-9 hours of continuous sleep tonight.");
-    }
-    if (data.screen >= 8) {
-      reasons.push(`High screen exposure (${data.screen}h)`);
-      plan.push("Implement the 20-20-20 rule for your eyes.");
-    }
-    if (data.stress >= 7) {
-      reasons.push("Elevated stress levels");
-      plan.push("Practice 10 mins of mindfulness or breathing.");
-    }
-    if (data.study >= 8) {
-      reasons.push(`Intense cognitive load (${data.study}h)`);
-      plan.push("Take at least 15 min break per 90 mins of work.");
-    }
-    
-    if (reasons.length === 0) {
-      reasons.push("Relatively balanced routine");
-      plan.push("Keep maintaining current healthy habits!");
-    }
-
-    if (level === "HIGH") recovery = "48-72 hours of active rest";
-    else if (level === "MEDIUM") recovery = "24-48 hours";
-
-    return { reasons, plan, recovery };
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  async function onAnalyze() {
     setLoading(true);
-
     try {
-      const API = process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
-      const res = await fetch(`${API}/predict`, {
+      const payload = {
+        user_id: userId,
+        sleep,
+        study,
+        screen,
+        stress
+      };
+      const res = await fetch(`${getApiUrl()}/predict`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, user_id: userId }),
+        headers: { "Content-Type" : "application/json" },
+        body: JSON.stringify(payload)
       });
-      
       const data = await res.json();
-      setResult(data);
       
-      const computedScore = calculateScore(formData);
-      setFatigueScore(computedScore);
-      setExtInsights(generateInsights(formData, data.fatigue));
+      const localCalc = analyzeLocal(sleep, study, screen, stress);
       
+      // Parse AI output
+      let aiFields = { suggestion: "", insight: "", quote: "" };
+      if (data.recommendation) {
+        let rec = data.recommendation;
+        if (typeof rec === 'string') {
+          try { rec = JSON.parse(rec); } catch(e) {}
+        }
+        aiFields.suggestion = rec.suggestion || "Take rest.";
+        aiFields.insight = rec.summary || "You may be experiencing fatigue.";
+        aiFields.quote = rec.quote || "Rest if you must, but don't quit.";
+      }
+
+      setResult({
+        ...localCalc,
+        status: data.fatigue || localCalc.status,
+        suggestion: aiFields.suggestion,
+        insight: aiFields.insight,
+        quote: aiFields.quote,
+      });
+
       loadHistory(userId);
-    } catch (error) {
-      alert("Failed to connect to backend. Is Flask running?");
+    } catch (e) {
+      alert("Failed to analyze. Is backend running?");
     } finally {
       setLoading(false);
     }
+  }
+
+  const statusColor = {
+    LOW: "text-green-600",
+    MEDIUM: "text-amber-600",
+    HIGH: "text-red-600",
   };
-
-  const getColor = (level) => {
-    if (level === "HIGH") return "text-red-600 bg-red-100 border-red-200";
-    if (level === "MEDIUM") return "text-yellow-600 bg-yellow-100 border-yellow-200";
-    if (level === "LOW") return "text-green-600 bg-green-100 border-green-200";
-    return "";
+  const statusBg = {
+    LOW: "bg-green-50 border-green-200",
+    MEDIUM: "bg-amber-50 border-amber-200",
+    HIGH: "bg-red-50 border-red-200",
   };
-
-  const getProgressColor = (score) => {
-    if (score >= 70) return "bg-red-500";
-    if (score >= 40) return "bg-yellow-500";
-    return "bg-green-500";
-  };
-
-  const renderRecommendation = (recInput) => {
-    if (!recInput) return null;
-    let data;
-    try {
-      data = typeof recInput === "string" ? JSON.parse(recInput) : recInput;
-    } catch (e) {
-      return <p className="text-slate-600 mt-4">{recInput}</p>;
-    }
-    
-    if (!data.suggestion) return <p className="text-slate-600 mt-4">{recInput}</p>;
-
-    return (
-      <div className="mt-6 flex flex-col gap-4 text-left w-full">
-        <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-          <h3 className="text-sm font-bold text-blue-700 mb-2 flex items-center gap-2">
-            <Target className="w-4 h-4" /> Suggestion
-          </h3>
-          <p className="text-slate-700 text-sm">{data.suggestion}</p>
-        </div>
-        
-        <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100">
-          <h3 className="text-sm font-bold text-purple-700 mb-2 flex items-center gap-2">
-            <Brain className="w-4 h-4" /> AI Insight
-          </h3>
-          <p className="text-slate-700 text-sm">{data.summary}</p>
-        </div>
-
-        <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100">
-          <h3 className="text-sm font-bold text-amber-700 mb-2 flex items-center gap-2">
-            <HeartPulse className="w-4 h-4" /> Motivation
-          </h3>
-          <p className="text-slate-700 text-sm italic font-medium">"{data.quote}"</p>
-        </div>
-      </div>
-    );
+  const barColor = {
+    LOW: "bg-green-500",
+    MEDIUM: "bg-amber-500",
+    HIGH: "bg-red-500",
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 py-8">
-      {/* Top Bar */}
-      <div className="flex justify-between items-center mb-8 glass-panel bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Activity className="text-primary w-6 h-6" /> MindAlert Dashboard
-        </h1>
-        <button onClick={handleLogout} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors border border-transparent hover:border-red-100">
+    <div className="max-w-7xl mx-auto px-6 py-10 min-h-[calc(100vh-80px)]">
+      <div className="mb-10 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold">MindAlert <span className="gradient-text">Dashboard</span></h1>
+          <p className="text-muted-foreground mt-2">Adjust the sliders to reflect your day, then analyze your fatigue.</p>
+        </div>
+        <button onClick={handleLogout} className="btn-ghost text-sm px-4 py-2 hover:bg-black/5 flex items-center gap-2">
           <LogOut className="w-4 h-4" /> Logout
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left Form Panel */}
-        <div className="lg:col-span-5 glass-panel bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/40 flex flex-col self-start">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-8 flex-grow">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Current Status</h2>
-              <p className="text-slate-500 text-sm mt-1">Adjust sliders to reflect your last 24 hours.</p>
+      <div className="grid lg:grid-cols-2 gap-6 items-start">
+        {/* Left: Inputs */}
+        <div className="glass-card p-7 space-y-6">
+          <h2 className="font-semibold text-lg flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> Your day</h2>
+          
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-sm font-medium">Sleep Hours</label>
+              <span className="text-sm text-primary font-semibold">{sleep}h</span>
             </div>
-            
-            <div className="space-y-6">
-              {/* Sleep */}
-              <div>
-                <label className="flex justify-between text-sm font-bold text-slate-700 mb-3">
-                  <span>Sleep Hours</span>
-                  <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-md">{formData.sleep}h</span>
-                </label>
-                <input type="range" name="sleep" min="0" max="24" step="0.5" value={formData.sleep} onChange={handleChange} className="w-full" />
-              </div>
+            <input type="range" min={0} max={12} step={0.5} value={sleep} onChange={(e) => setSleep(Number(e.target.value))} className="w-full accent-primary h-2 rounded-lg appearance-none cursor-pointer bg-muted" />
+          </div>
 
-              {/* Study */}
-              <div>
-                <label className="flex justify-between text-sm font-bold text-slate-700 mb-3">
-                  <span>Study/Work Hours</span>
-                  <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-md">{formData.study}h</span>
-                </label>
-                <input type="range" name="study" min="0" max="24" step="0.5" value={formData.study} onChange={handleChange} className="w-full" />
-              </div>
-
-              {/* Screen Time */}
-              <div>
-                <label className="flex justify-between text-sm font-bold text-slate-700 mb-3">
-                  <span>Screen Time</span>
-                  <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-md">{formData.screen}h</span>
-                </label>
-                <input type="range" name="screen" min="0" max="24" step="0.5" value={formData.screen} onChange={handleChange} className="w-full" />
-              </div>
-
-              {/* Stress Level */}
-              <div>
-                <label className="flex justify-between text-sm font-bold text-slate-700 mb-3">
-                  <span>Stress Level (1-10)</span>
-                  <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-md">{formData.stress}/10</span>
-                </label>
-                <input type="range" name="stress" min="1" max="10" step="1" value={formData.stress} onChange={handleChange} className="w-full" />
-              </div>
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-sm font-medium">Study Hours</label>
+              <span className="text-sm text-primary font-semibold">{study}h</span>
             </div>
+            <input type="range" min={0} max={14} step={0.5} value={study} onChange={(e) => setStudy(Number(e.target.value))} className="w-full accent-primary h-2 rounded-lg appearance-none cursor-pointer bg-muted" />
+          </div>
 
-            <button type="submit" disabled={loading} className="mt-4 w-full py-4 rounded-xl bg-primary text-white font-bold text-lg hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-70 flex items-center justify-center">
-              {loading ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  Analyzing Data...
-                </span>
-              ) : "Analyze Fatigue"}
-            </button>
-          </form>
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-sm font-medium">Screen Time</label>
+              <span className="text-sm text-primary font-semibold">{screen}h</span>
+            </div>
+            <input type="range" min={0} max={14} step={0.5} value={screen} onChange={(e) => setScreen(Number(e.target.value))} className="w-full accent-primary h-2 rounded-lg appearance-none cursor-pointer bg-muted" />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-sm font-medium">Stress Level</label>
+              <span className="text-sm text-primary font-semibold">{stress}/10</span>
+            </div>
+            <input type="range" min={0} max={10} step={1} value={stress} onChange={(e) => setStress(Number(e.target.value))} className="w-full accent-primary h-2 rounded-lg appearance-none cursor-pointer bg-muted" />
+          </div>
+
+          <button onClick={onAnalyze} disabled={loading} className="w-full btn-primary disabled:opacity-70 hover:-translate-y-0.5 transition">
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</> : <>Analyze Fatigue</>}
+          </button>
         </div>
 
-        {/* Right Details Panel */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          
-          {/* Active Result Card */}
-          <div className={`glass-panel bg-white p-6 md:p-8 rounded-3xl border ${result ? 'border-slate-200 shadow-xl shadow-slate-200/40' : 'border-slate-200 flex flex-col items-center justify-center min-h-[300px]'}`}>
-            {result ? (
-              <div className="animate-in fade-in zoom-in duration-500 w-full">
-                
-                <div className="flex flex-col md:flex-row md:items-center justify-between mx-auto w-full gap-6 mb-6">
-                  {/* Status Badge */}
-                  <div className="flex flex-col gap-2">
-                     <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Detection Result</p>
-                     <div className={`inline-flex items-center px-4 py-2 rounded-xl border ${getColor(result.fatigue)}`}>
-                       <span className="text-2xl font-black">{result.fatigue}</span>
-                     </div>
-                  </div>
-
-                  {/* Fatigue Score */}
-                  <div className="flex flex-col gap-2 w-full md:w-1/2">
-                    <div className="flex justify-between items-end">
-                      <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Fatigue Score</p>
-                      <span className="text-xl font-black text-slate-800">{fatigueScore}<span className="text-sm font-bold text-slate-400">/100</span></span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-3">
-                      <div className={`h-3 rounded-full transition-all duration-1000 ${getProgressColor(fatigueScore)}`} style={{ width: `${fatigueScore}%` }}></div>
-                    </div>
-                  </div>
+        {/* Right: Result */}
+        <div className="glass-card p-7">
+          {!result ? (
+            <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground min-h-[350px]">
+              <Sparkles className="h-10 w-10 mb-4 text-primary/60" />
+              <p>Your personalized fatigue report will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-5 animate-in fade-in zoom-in duration-300">
+              <div className={`rounded-xl border p-5 ${statusBg[result.status]}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-muted-foreground font-semibold">Fatigue Status</span>
+                  <span className={`font-bold text-xl ${statusColor[result.status]}`}>{result.status}</span>
                 </div>
-
-                {extInsights && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 border-t border-slate-100 pt-6">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <h4 className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5 mb-2">
-                        <AlertCircle className="w-3.5 h-3.5" /> Why this result?
-                      </h4>
-                      <ul className="text-sm text-slate-700 list-disc pl-4 space-y-1">
-                        {extInsights.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                      </ul>
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <h4 className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5 mb-2">
-                        <CheckSquare className="w-3.5 h-3.5" /> Improvement Plan
-                      </h4>
-                      <ul className="text-sm text-slate-700 list-disc pl-4 space-y-1">
-                        {extInsights.plan.map((p, i) => <li key={i}>{p}</li>)}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-                {extInsights && (
-                  <div className="mt-4 bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
-                    <h4 className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" /> Recovery Estimate
-                    </h4>
-                    <span className="text-sm font-bold text-slate-800">{extInsights.recovery}</span>
-                  </div>
-                )}
-                
-                {renderRecommendation(result.recommendation)}
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Activity className="w-8 h-8" />
+                <div className="flex items-center justify-between mb-1.5 text-xs text-muted-foreground font-medium">
+                  <span>Estimated Score</span><span>{result.score}/100</span>
                 </div>
-                <h3 className="text-lg font-bold text-slate-700 mb-1">Awaiting Data</h3>
-                <p className="text-slate-500 max-w-sm mx-auto">Submit your daily metrics on the left to unlock smart AI insights and view your fatigue score.</p>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className={`h-full ${barColor[result.status]} transition-all duration-1000`} style={{ width: `${result.score}%` }} />
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* History Card */}
-          <div className="glass-panel bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex-grow overflow-hidden flex flex-col min-h-[250px]">
-            <h3 className="text-sm font-bold tracking-wider text-slate-500 uppercase mb-4 flex items-center gap-2">
-              <History className="w-4 h-4" /> Recent History
-            </h3>
-            {history.length > 0 ? (
-              <ul className="space-y-3 overflow-y-auto pr-2">
-                {history.map((log) => (
-                  <li key={log.id} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100 text-sm hover:bg-slate-100 transition-colors">
-                    <div className="flex flex-col">
-                       <span className="font-semibold text-slate-800">
-                         {new Date(log.created_at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric'})}
-                       </span>
-                       <span className="text-xs text-slate-500">
-                         {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                       </span>
-                    </div>
-                    <span className={`px-3 py-1.5 rounded-lg text-xs font-black border ${getColor(log.fatigue_result)}`}>
-                      {log.fatigue_result}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="m-auto text-center">
-                <p className="text-slate-500 text-sm font-medium">No records found.</p>
-                <p className="text-slate-400 text-xs mt-1">Your past reports will appear here.</p>
+              <div className="p-4 rounded-xl bg-white shadow-sm border border-slate-200">
+                <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">AI Suggestion</p>
+                <p className="text-sm text-foreground/90 leading-relaxed">{result.suggestion}</p>
               </div>
-            )}
-          </div>
 
+              <div className="p-4 rounded-xl bg-white shadow-sm border border-slate-200">
+                <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider flex items-center gap-1.5"><Sparkles className="h-3 w-3" /> AI Summary</p>
+                <p className="text-sm text-foreground/90 leading-relaxed">{result.insight}</p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex gap-3 shadow-inner">
+                <Quote className="h-5 w-5 text-primary shrink-0 opacity-70" />
+                <p className="text-sm italic font-medium text-foreground/80">{result.quote}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Extra sections */}
+      {result && (
+        <div className="grid md:grid-cols-3 gap-6 mt-6 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="glass-card p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><Lightbulb className="h-4 w-4 text-warning" /> Why this result?</h3>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              {result.reasons.map((r, i) => <li key={i} className="flex gap-2.5 items-start"><span className="text-primary mt-0.5">•</span><span className="leading-tight">{r}</span></li>)}
+            </ul>
+          </div>
+          <div className="glass-card p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><ListChecks className="h-4 w-4 text-success" /> Improvement Plan</h3>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              {result.plan.map((p, i) => <li key={i} className="flex gap-2.5 items-start"><span className="text-success font-bold mt-0.5 opacity-80">✓</span><span className="leading-tight">{p}</span></li>)}
+            </ul>
+          </div>
+          <div className="glass-card p-6 flex flex-col justify-center items-center text-center">
+            <h3 className="font-semibold mb-2 flex items-center gap-2 text-muted-foreground uppercase tracking-widest text-xs"><Clock className="h-4 w-4 text-accent" /> Recovery Scope</h3>
+            <p className="text-5xl font-extrabold gradient-text my-2">{result.recoveryHours}h</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-[200px]">Estimated rest needed to fully recover focus.</p>
+          </div>
+        </div>
+      )}
+
+      {/* History */}
+      <div className="glass-card p-6 mt-6">
+        <h3 className="font-semibold mb-4 text-lg">Your Insight History</h3>
+        <div className="space-y-3">
+          {history.length > 0 ? history.map((h, i) => (
+            <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/50 hover:bg-white/80 transition-colors border border-border shadow-sm">
+              <span className="text-sm text-foreground/70 font-medium">{h.date}</span>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">Score: <span className="font-bold text-foreground">{h.score}</span></span>
+                <span className={`text-xs font-extrabold px-3 py-1 rounded-full border shadow-sm ${statusBg[h.status]} ${statusColor[h.status]}`}>{h.status}</span>
+              </div>
+            </div>
+          )) : (
+            <div className="p-8 text-center text-muted-foreground text-sm bg-white/50 rounded-xl border border-dashed border-border">
+              Submit your first analysis to start tracking history.
+            </div>
+          )}
         </div>
       </div>
     </div>

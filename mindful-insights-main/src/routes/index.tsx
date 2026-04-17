@@ -1,14 +1,22 @@
-import Link from "next/link";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Layout } from "@/components/Layout";
 import { Activity, Brain, Heart, History, Sparkles, ShieldCheck, ArrowRight } from "lucide-react";
 
-export const metadata = {
-  title: "MindAlert — Student Fatigue & Mental Health Analyzer",
-  description: "Track your fatigue and improve your mental well-being with AI-powered insights designed for students."
-};
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "MindAlert — Student Fatigue & Mental Health Analyzer" },
+      { name: "description", content: "Track your fatigue and improve your mental well-being with AI-powered insights designed for students." },
+      { property: "og:title", content: "MindAlert — Student Fatigue & Mental Health Analyzer" },
+      { property: "og:description", content: "Track your fatigue and improve your mental well-being with AI-powered insights." },
+    ],
+  }),
+  component: Home,
+});
 
-export default function Home() {
+function Home() {
   return (
-    <main className="min-h-screen">
+    <Layout>
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10">
@@ -30,10 +38,10 @@ export default function Home() {
             early, understand its causes, and take meaningful action — backed by AI insights.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/login" className="btn-primary hover:-translate-y-0.5 transition">
+            <Link to="/login" className="btn-primary hover:[transform:translateY(-2px)]">
               Get Started <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/about" className="btn-ghost hover:bg-secondary">Learn More</Link>
+            <Link to="/about" className="btn-ghost hover:bg-secondary">Learn More</Link>
           </div>
         </div>
       </section>
@@ -53,7 +61,7 @@ export default function Home() {
             { icon: ShieldCheck, title: "Prevention matters", text: "Catching warning signs early prevents long-term burnout." },
             { icon: Brain, title: "Smarter studying", text: "Rested minds outperform exhausted ones — every single time." },
           ].map((c) => (
-            <div key={c.title} className="glass-card p-7 hover:-translate-y-1 transition">
+            <div key={c.title} className="glass-card p-7 hover:translate-y-[-4px] transition">
               <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style={{ background: "var(--gradient-primary)" }}>
                 <c.icon className="h-5 w-5 text-primary-foreground" />
               </div>
@@ -76,7 +84,7 @@ export default function Home() {
             { icon: Sparkles, title: "AI Insights", text: "Personalized explanations and recovery suggestions powered by AI." },
             { icon: History, title: "History Tracking", text: "Visualize trends over time and watch your habits improve." },
           ].map((c) => (
-            <div key={c.title} className="glass-card p-7 hover:-translate-y-1 transition">
+            <div key={c.title} className="glass-card p-7 hover:translate-y-[-4px] transition">
               <c.icon className="h-8 w-8 text-primary mb-4" />
               <h3 className="font-semibold text-lg mb-2">{c.title}</h3>
               <p className="text-sm text-muted-foreground">{c.text}</p>
@@ -90,11 +98,11 @@ export default function Home() {
         <div className="glass-card p-12 text-center" style={{ background: "var(--gradient-primary)" }}>
           <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-4">Ready to feel better?</h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">Take 30 seconds to analyze your fatigue and get a personalized plan.</p>
-          <Link href="/login" className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-background text-foreground font-semibold hover:-translate-y-0.5 transition">
+          <Link to="/login" className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-background text-foreground font-semibold hover:translate-y-[-2px] transition">
             Get Started Free <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>
-    </main>
+    </Layout>
   );
 }

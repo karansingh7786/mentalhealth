@@ -1,55 +1,31 @@
-"use client";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Brain, Mail, Lock, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [mode, setMode] = useState("login");
+export const Route = createFileRoute("/login")({
+  head: () => ({ meta: [{ title: "Login — MindAlert" }, { name: "description", content: "Sign in to your MindAlert account." }] }),
+  component: LoginPage,
+});
+
+function LoginPage() {
+  const navigate = useNavigate();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
-
-  async function submit(e) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    
     if (!email.includes("@")) return setError("Please enter a valid email address.");
     if (password.length < 6) return setError("Password must be at least 6 characters.");
-    
-    setLoading(true);
-    
-    try {
-      const endpoint = mode === "login" ? "/login" : "/signup";
-      const res = await fetch(`${getApiUrl()}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        localStorage.setItem("user_id", data.user_id);
-        router.push("/dashboard");
-      } else {
-        setError(data.error || "An error occurred");
-      }
-    } catch (err) {
-      setError("Failed to connect to the backend server.");
-    } finally {
-      setLoading(false);
-    }
+    navigate({ to: "/dashboard" });
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md animate-in fade-in zoom-in duration-300">
-        <Link href="/" className="flex items-center justify-center gap-2 mb-8">
+      <div className="w-full max-w-md">
+        <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-primary)" }}>
             <Brain className="h-6 w-6 text-primary-foreground" />
           </div>
@@ -71,7 +47,7 @@ export default function LoginPage() {
 
           <form onSubmit={submit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1.5 block text-foreground">Email</label>
+              <label className="text-sm font-medium mb-1.5 block">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
@@ -79,12 +55,12 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@university.edu"
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-input border border-border text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block text-foreground">Password</label>
+              <label className="text-sm font-medium mb-1.5 block">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
@@ -92,19 +68,18 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-input border border-border text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full btn-primary disabled:opacity-70 flex justify-center items-center">
-              {loading ? "Please wait..." : mode === "login" ? "Login" : "Sign Up"}
+            <button type="submit" className="w-full btn-primary hover:[transform:translateY(-2px)]">
+              {mode === "login" ? "Login" : "Sign Up"}
             </button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
-              type="button"
               onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
               className="text-primary hover:underline font-medium"
             >
