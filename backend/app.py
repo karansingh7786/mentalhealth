@@ -1,3 +1,4 @@
+import concurrent.futures
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
@@ -90,52 +91,56 @@ def login():
             conn.close()
 
 # --- FATIGUE LOGIC & PREDICTION ---
+# Cache for AI responses
+FATIGUE_CACHE = {}
+
 def get_recommendation(fatigue, sleep, study, screen, stress):
     """Generates the recommendation using Gemini AI if available, else uses defaults."""
     fallback = {
         "suggestion": "Take rest and stay hydrated.",
-        "summary": "You may be experiencing fatigue due to imbalance in routine.",
+        "summary": "You may be experiencing fatigue.",
         "quote": "Rest if you must, but don’t quit."
     }
+
+    # Instantly return cached response if it exists
+    if fatigue in FATIGUE_CACHE:
+        print(f"DEBUG: Returning cached response for fatigue level: {fatigue}")
+        return FATIGUE_CACHE[fatigue]
 
     # Try AI First
     if GEMINI_API_KEY:
         try:
             print(f"DEBUG: Authenticating with Gemini API Key (Length: {len(GEMINI_API_KEY)})")
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            prompt = f"""Student Data:
-Sleep: {sleep} hours
-Study: {study} hours
-Screen Time: {screen} hours
-Stress: {stress}/10
-Fatigue: {fatigue}
-
-Give:
-1. One short practical suggestion
-2. One-line summary of condition
-3. One motivational quote
-
-Return ONLY valid JSON in this exact format:
-{{
-"suggestion": "...",
-"summary": "...",
-"quote": "..."
-}}
-Do not include markdown or extra text."""
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt = f"Fatigue: {fatigue}. Give short suggestion, summary, and quote. Return JSON only."
             
-            response = model.generate_content(prompt)
-            print("Gemini RAW:", response.text)
-            
-            # Safe JSON Extraction via Regex
-            match = re.search(r'\{.*\}', response.text, re.DOTALL)
-            if match:
-                ai_data = json.loads(match.group(0))
-                
-                # Ensure keys exist before returning
-                if 'suggestion' in ai_data and 'summary' in ai_data and 'quote' in ai_data:
-                    return ai_data
-            else:
-                print("Gemini error: No valid JSON block found in response.")
+            def fetch_from_gemini():
+                response = model.generate_content(prompt)
+                print("Gemini RAW:", response.text)
+                match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                if match:
+                    ai_data = json.loads(match.group(0))
+                    
+                    # Ensure keys exist before returning
+                    if 'suggestion' in ai_data and 'summary' in ai_data and 'quote' in ai_data:
+                        return ai_data
+                return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(fetch_from_gemini)
+                try:
+                    # Wait for at most 2 seconds
+                    result = future.result(timeout=2.0)
+                    if result:
+                        # Cache the successful result before returning
+                        FATIGUE_CACHE[fatigue] = result
+                        return result
+                    else:
+                        print("Gemini error: No valid JSON block found in response.")
+                except concurrent.futures.TimeoutError:
+                    print("Gemini error: Timeout exceeded 2 seconds.")
+                except Exception as e:
+                    print(f"Gemini error during generation: {e}")
         except Exception as e:
             print(f"Gemini error: {e}")
             pass # Fallback to default if API fails
