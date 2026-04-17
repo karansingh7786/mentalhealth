@@ -8,12 +8,12 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: '#0d1117',
-        panel: '#1e242cf0',
-        primary: '#58a6ff',
-        low: '#2ea043',
-        medium: '#d29922',
-        high: '#f85149'
+        background: '#f8fafc',
+        panel: '#ffffff',
+        primary: '#3b82f6',
+        low: '#22c55e',
+        medium: '#eab308',
+        high: '#ef4444'
       }
     },
   },
