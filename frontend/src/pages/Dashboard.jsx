@@ -1,10 +1,10 @@
-"use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Activity, Sparkles, Quote, Lightbulb, Clock, ListChecks, Loader2, LogOut } from "lucide-react";
+import { getApiUrl } from "../config";
 
 export default function Dashboard() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
   
   const [sleep, setSleep] = useState(7);
@@ -19,14 +19,12 @@ export default function Dashboard() {
   useEffect(() => {
     const storedUserId = localStorage.getItem("user_id");
     if (!storedUserId) {
-      router.push("/login");
+      navigate("/login");
     } else {
       setUserId(storedUserId);
       loadHistory(storedUserId);
     }
   }, []);
-
-  const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
 
   const loadHistory = async (uid) => {
     try {
@@ -57,7 +55,7 @@ export default function Dashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem("user_id");
-    router.push("/");
+    navigate("/");
   };
 
   const analyzeLocal = (sleep, study, screen, stress) => {

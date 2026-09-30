@@ -1,10 +1,5 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Activity, Brain, Heart, History, Sparkles, ShieldCheck, ArrowRight } from "lucide-react";
-
-export const metadata = {
-  title: "MindAlert — Student Fatigue & Mental Health Analyzer",
-  description: "Track your fatigue and improve your mental well-being with AI-powered insights designed for students."
-};
 
 export default function Home() {
   return (
@@ -30,10 +25,10 @@ export default function Home() {
             early, understand its causes, and take meaningful action — backed by AI insights.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/login" className="btn-primary hover:-translate-y-0.5 transition">
+            <Link to="/login" className="btn-primary hover:-translate-y-0.5 transition">
               Get Started <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/about" className="btn-ghost hover:bg-secondary">Learn More</Link>
+            <Link to="/about" className="btn-ghost hover:bg-secondary">Learn More</Link>
           </div>
         </div>
       </section>
@@ -90,7 +85,7 @@ export default function Home() {
         <div className="glass-card p-12 text-center" style={{ background: "var(--gradient-primary)" }}>
           <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-4">Ready to feel better?</h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">Take 30 seconds to analyze your fatigue and get a personalized plan.</p>
-          <Link href="/login" className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-background text-foreground font-semibold hover:-translate-y-0.5 transition">
+          <Link to="/login" className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-background text-foreground font-semibold hover:-translate-y-0.5 transition">
             Get Started Free <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

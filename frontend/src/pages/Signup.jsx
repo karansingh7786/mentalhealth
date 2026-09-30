@@ -1,11 +1,10 @@
-"use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, ArrowRight, UserPlus } from "lucide-react";
+import { getApiUrl } from "../config";
 
 export default function Signup() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,8 +15,7 @@ export default function Signup() {
     setError("");
 
     try {
-      const API = process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
-      const res = await fetch(`${API}/signup`, {
+      const res = await fetch(`${getApiUrl()}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -26,7 +24,7 @@ export default function Signup() {
 
       if (res.ok) {
         localStorage.setItem("user_id", data.user_id);
-        router.push("/dashboard");
+        navigate("/dashboard");
       } else {
         setError(data.error || "Signup failed");
       }
@@ -94,7 +92,7 @@ export default function Signup() {
         </form>
 
         <p className="mt-8 text-center text-sm text-slate-500 font-medium">
-          Already have an account? <Link href="/login" className="text-primary hover:text-blue-700 hover:underline transition-colors">Login</Link>
+          Already have an account? <Link to="/login" className="text-primary hover:text-blue-700 hover:underline transition-colors">Login</Link>
         </p>
       </div>
     </div>

@@ -1,18 +1,15 @@
-"use client";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Brain, Mail, Lock, AlertCircle } from "lucide-react";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Brain, Mail, Lock, AlertCircle } from "lucide-react";
+import { getApiUrl } from "../config";
 
-export default function LoginPage() {
-  const router = useRouter();
+export default function Login() {
+  const navigate = useNavigate();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "https://mentalhealth-d7cp.onrender.com";
 
   async function submit(e) {
     e.preventDefault();
@@ -35,7 +32,7 @@ export default function LoginPage() {
       
       if (res.ok) {
         localStorage.setItem("user_id", data.user_id);
-        router.push("/dashboard");
+        navigate("/dashboard");
       } else {
         setError(data.error || "An error occurred");
       }
@@ -49,21 +46,21 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md animate-in fade-in zoom-in duration-300">
-        <Link href="/" className="flex items-center justify-center gap-2 mb-8">
+        <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-primary)" }}>
             <Brain className="h-6 w-6 text-primary-foreground" />
           </div>
           <span className="font-bold text-xl gradient-text">MindAlert</span>
         </Link>
 
-        <div className="glass-card p-8">
-          <h1 className="text-2xl font-bold mb-1">{mode === "login" ? "Welcome back" : "Create account"}</h1>
+        <div className="glass-card p-8 bg-white/80">
+          <h1 className="text-2xl font-bold mb-1 text-slate-900">{mode === "login" ? "Welcome back" : "Create account"}</h1>
           <p className="text-sm text-muted-foreground mb-6">
             {mode === "login" ? "Sign in to continue tracking your wellbeing." : "Start your mental wellness journey today."}
           </p>
 
           {error && (
-            <div className="flex items-start gap-2 p-3 mb-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+            <div className="flex items-start gap-2 p-3 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
